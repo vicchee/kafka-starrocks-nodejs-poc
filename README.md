@@ -4,6 +4,12 @@ This guide sets up a pipeline where Node.js sends wager events to Kafka, which a
 After setup, run `npm run deploy` to build and restart the app.
 
 ---
+## Prerequisites
+
+- Install [Docker Desktop](https://www.docker.com/products/docker-desktop) and ensure it is running.
+- Install [Node.js](https://nodejs.org/) (v16+ recommended).
+- Install [npm](https://www.npmjs.com/get-npm) if not included with Node.js.
+---
 
 ## Environment Variables
 
