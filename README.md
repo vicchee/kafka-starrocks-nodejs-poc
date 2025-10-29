@@ -10,6 +10,10 @@ After setup, run `npm run deploy` to rebuild and restart automatically.
 Create a `.env` file in your project root:
 
 ```bash
+# Node.js
+NODE_ENV=development
+PORT=8089
+
 # Kafka
 KAFKA_BROKERS=kafka:9092
 KAFKA_CLIENT_ID=app-producer
@@ -18,11 +22,11 @@ KAFKA_WAGERS_TOPIC=get-wagers-topic
 # StarRocks
 STARROCKS_HOST=starrocks
 STARROCKS_PORT=9030
-STARROCKS_USER=root
-STARROCKS_DB=starrocks
 
 # Cron
-WAGERS_CRON=*/1 * * * *
+ENABLE_CRON=1
+ENABLE_WAGERS_CRON=1
+WAGERS_CRON=* * * * *
 
 
 ```
