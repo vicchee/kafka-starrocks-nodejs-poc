@@ -1,7 +1,7 @@
 # StarRocks + Kafka + Node.js Deployment Guide
 
-This guide sets up and deploys the full pipeline connecting Node.js, Kafka, and StarRocks using Docker Compose.
-After setup, run `npm run deploy` to rebuild and restart automatically.
+This guide sets up a pipeline where Node.js sends wager events to Kafka, which are ingested into StarRocks via Kafka Routine Load.  
+After setup, run `npm run deploy` to build and restart the app.
 
 ---
 
