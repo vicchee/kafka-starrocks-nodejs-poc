@@ -1,12 +1,24 @@
-const { queryWagers } = require("./services");
+const { queryWagers, queryWagersCombined } = require("./services");
 
 async function getWagers(req, res) {
   try {
-    const result = await queryWagers(req.query);
+    const caseType = req.params.mode;
+    let result;
+    switch (caseType) {
+      case "2-query": {
+        result = await queryWagers(req.query);
+        break;
+      }
+      case "1-query":
+      default: {
+        result = await queryWagersCombined(req.query);
+        break;
+      }
+    }
     res.json(result);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({ error: err });
   }
 }
 

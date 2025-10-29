@@ -1,4 +1,4 @@
-const pool = require("../../common/db/pool");
+const { query } = require("../../common/db/pool");
 
 async function queryWagers({
   merchant_id,
@@ -14,7 +14,6 @@ async function queryWagers({
   const settlementParams = [];
 
   let dateFormat;
-
   switch (group_by.toLowerCase()) {
     case "day":
       dateFormat = "%Y-%m-%d";
@@ -22,47 +21,43 @@ async function queryWagers({
     case "year":
       dateFormat = "%Y";
       break;
-    case "month":
     default:
       dateFormat = "%b %Y";
-      break;
   }
-  if (merchant_id) {
-    conditions.push("merchant_id = ?");
-    params.push(merchant_id);
-    settlementConditions.push("merchant_id = ?");
-    settlementParams.push(merchant_id);
+
+  for (const [key, value] of Object.entries({
+    merchant_id,
+    user_id,
+    game_type,
+  })) {
+    if (value !== undefined) {
+      conditions.push(`${key} = ?`);
+      settlementConditions.push(`${key} = ?`);
+      params.push(value);
+      settlementParams.push(value);
+    }
   }
-  if (user_id) {
-    conditions.push("user_id = ?");
-    params.push(user_id);
-    settlementConditions.push("user_id = ?");
-    settlementParams.push(user_id);
-  }
-  if (game_type) {
-    conditions.push("game_type = ?");
-    params.push(game_type);
-    settlementConditions.push("game_type = ?");
-    settlementParams.push(game_type);
-  }
+
   if (from) {
     conditions.push("wager_time >= UNIX_TIMESTAMP(?)");
-    params.push(from);
     settlementConditions.push("settlement_time >= UNIX_TIMESTAMP(?)");
+    params.push(from);
     settlementParams.push(from);
   }
   if (to) {
     conditions.push("wager_time <= UNIX_TIMESTAMP(?)");
-    params.push(to);
     settlementConditions.push("settlement_time <= UNIX_TIMESTAMP(?)");
+    params.push(to);
     settlementParams.push(to);
   }
 
   const whereClause = conditions.length
-    ? "WHERE " + conditions.join(" AND ")
+    ? `WHERE ${conditions.join(" AND ")}`
+    : "";
+  const settlementWhere = settlementConditions.length
+    ? `WHERE ${settlementConditions.join(" AND ")}`
     : "";
 
-  // 1. total wagers and total amount grouped by wager_time month
   const wagersSql = `
     SELECT
       DATE_FORMAT(FROM_UNIXTIME(wager_time), '${dateFormat}') AS group_col,
@@ -71,13 +66,8 @@ async function queryWagers({
       SUM(effective_amount) AS total_effective_amount
     FROM wagers
     ${whereClause}
-    GROUP BY DATE_FORMAT(FROM_UNIXTIME(wager_time), '${dateFormat}')
+    GROUP BY group_col
   `;
-
-  // 2. total profit and loss grouped by settlement_time month
-  const settlementWhere = settlementConditions.length
-    ? "WHERE " + settlementConditions.join(" AND ")
-    : "";
 
   const profitSql = `
     SELECT
@@ -85,40 +75,162 @@ async function queryWagers({
       SUM(profit_and_loss) AS total_profit_and_loss
     FROM wagers
     ${settlementWhere}
-    GROUP BY DATE_FORMAT(FROM_UNIXTIME(settlement_time), '${dateFormat}')
+    GROUP BY group_col
   `;
 
-  const [wagersRows] = await pool.query(wagersSql, params);
-  const [profitRows] = await pool.query(profitSql, settlementParams);
+  const wagersRows = await query(wagersSql, params);
+  const profitRows = await query(profitSql, settlementParams);
 
-  // merge by group_col
   const merged = {};
-  wagersRows.forEach((row) => {
+
+  // Add wager rows
+  for (const row of wagersRows) {
     merged[row.group_col] = {
-      group: row.group_col,
+      group_col: row.group_col,
       total_wager_count: row.total_wager_count,
       total_amount: row.total_amount,
       total_effective_amount: row.total_effective_amount,
-      total_profit_and_loss: 0,
+      total_profit_and_loss: Number(0).toFixed(6),
     };
-  });
-  profitRows.forEach((row) => {
-    if (!merged[row.group_col]) {
-      merged[row.group_col] = {
-        group: row.group_col,
-        total_wager_count: 0,
-        total_amount: 0,
-        total_effective_amount: 0,
-      };
-    }
-    merged[row.group_col].total_profit_and_loss = row.total_profit_and_loss;
-  });
+  }
 
-  return Object.values(merged).sort((a, b) => {
-    const dateA = new Date(a.group);
-    const dateB = new Date(b.group);
-    return dateA - dateB;
-  });
+  // Merge profit rows
+  for (const row of profitRows) {
+    if (!merged[row.group_col]) {
+      // Row exists only in settlement
+      merged[row.group_col] = {
+        group_col: row.group_col,
+        total_wager_count: 0,
+        total_amount: Number(0).toFixed(6),
+        total_effective_amount: Number(0).toFixed(6),
+        total_profit_and_loss: row.total_profit_and_loss,
+      };
+    } else {
+      merged[row.group_col].total_profit_and_loss = row.total_profit_and_loss;
+    }
+  }
+
+  const parseGroup = (g) => {
+    switch (group_by.toLowerCase()) {
+      case "day":
+        return new Date(g); // YYYY-MM-DD
+      case "year":
+        return new Date(`${g}-01-01`);
+      default: {
+        // %b %Y, e.g. "Oct 2025"
+        const [mon, yr] = g.split(" ");
+        return new Date(`${mon} 1, ${yr}`);
+      }
+    }
+  };
+
+  return Object.values(merged).sort(
+    (a, b) => parseGroup(a.group_col) - parseGroup(b.group_col)
+  );
 }
 
-module.exports = { queryWagers };
+async function queryWagersCombined({
+  merchant_id,
+  user_id,
+  game_type,
+  from,
+  to,
+  group_by = "month",
+}) {
+  let dateFormat, orderFormat;
+  switch (group_by.toLowerCase()) {
+    case "day":
+      dateFormat = "%Y-%m-%d";
+      orderFormat = "%Y-%m-%d";
+      break;
+    case "year":
+      dateFormat = "%Y";
+      orderFormat = "%Y-01-01";
+      break;
+    default:
+      dateFormat = "%b %Y";
+      orderFormat = "%Y-%m-01";
+  }
+
+  const wagerFilters = [];
+  const settleFilters = [];
+  const wagerParams = [];
+  const settleParams = [];
+
+  for (const [key, value] of Object.entries({
+    merchant_id,
+    user_id,
+    game_type,
+  })) {
+    if (value !== undefined) {
+      wagerFilters.push(`w1.${key} = ?`);
+      settleFilters.push(`w2.${key} = ?`);
+      wagerParams.push(value);
+      settleParams.push(value);
+    }
+  }
+
+  if (from) {
+    wagerFilters.push("w1.wager_time >= UNIX_TIMESTAMP(?)");
+    settleFilters.push("w2.settlement_time >= UNIX_TIMESTAMP(?)");
+    wagerParams.push(from);
+    settleParams.push(from);
+  }
+
+  if (to) {
+    wagerFilters.push("w1.wager_time <= UNIX_TIMESTAMP(?)");
+    settleFilters.push("w2.settlement_time <= UNIX_TIMESTAMP(?)");
+    wagerParams.push(to);
+    settleParams.push(to);
+  }
+
+  // Combine params for UNION ALL (wager first, then settlement)
+  const params = [...wagerParams, ...settleParams];
+
+  const wagerWhere = wagerFilters.length
+    ? `WHERE ${wagerFilters.join(" AND ")}`
+    : "";
+  const settleWhere = settleFilters.length
+    ? `WHERE ${settleFilters.join(" AND ")}`
+    : "";
+
+  const sql = `
+    SELECT
+      group_col,
+      SUM(total_wager_count) AS total_wager_count,
+      SUM(total_amount) AS total_amount,
+      SUM(total_effective_amount) AS total_effective_amount,
+      SUM(total_profit_and_loss) AS total_profit_and_loss
+    FROM (
+      SELECT
+        DATE_FORMAT(FROM_UNIXTIME(w1.wager_time), '${dateFormat}') AS group_col,
+        UNIX_TIMESTAMP(DATE_FORMAT(FROM_UNIXTIME(w1.wager_time), '${orderFormat}')) AS group_order,
+        COUNT(*) AS total_wager_count,
+        SUM(w1.amount) AS total_amount,
+        SUM(w1.effective_amount) AS total_effective_amount,
+        0 AS total_profit_and_loss
+      FROM wagers w1
+      ${wagerWhere}
+      GROUP BY group_col, group_order
+
+      UNION ALL
+
+      SELECT
+        DATE_FORMAT(FROM_UNIXTIME(w2.settlement_time), '${dateFormat}') AS group_col,
+        UNIX_TIMESTAMP(DATE_FORMAT(FROM_UNIXTIME(w2.settlement_time), '${orderFormat}')) AS group_order,
+        0 AS total_wager_count,
+        0 AS total_amount,
+        0 AS total_effective_amount,
+        SUM(w2.profit_and_loss) AS total_profit_and_loss
+      FROM wagers w2
+      ${settleWhere}
+      GROUP BY group_col, group_order
+    ) t
+    GROUP BY group_col, group_order
+    ORDER BY group_order;
+  `;
+
+  return query(sql, params);
+}
+
+module.exports = { queryWagers, queryWagersCombined };

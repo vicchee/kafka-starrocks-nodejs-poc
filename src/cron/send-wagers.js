@@ -18,11 +18,11 @@ async function startWagersCron() {
         const oldWagerWithNewUpdatedAt = generateFixedWager();
         const newWager = generateNewWager();
         await sendToKafka(TOPIC, [oldWagerWithNewUpdatedAt, newWager]);
-        console.log(
-          "Producing wager to Kafka...",
-          oldWagerWithNewUpdatedAt,
-          newWager
-        );
+        // console.log(
+        //   "Producing wager to Kafka...",
+        //   oldWagerWithNewUpdatedAt,
+        //   newWager
+        // );
       } catch (err) {
         console.error("Kafka producer error:", err);
       }
