@@ -2,8 +2,8 @@ const express = require("express");
 const startWagersCron = require("./cron/send-wagers");
 const fs = require("fs");
 const path = require("path");
-const ENABLE_CRON = process.env.ENABLE_CRON === 1;
-const ENABLE_WAGERS_CRON = process.env.ENABLE_WAGERS_CRON === 1;
+const ENABLE_CRON = process.env.ENABLE_CRON;
+const ENABLE_WAGERS_CRON = process.env.ENABLE_WAGERS_CRON;
 
 const app = express();
 app.use(express.json());
@@ -24,8 +24,8 @@ app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 (async function main() {
   // Start all cron jobs
-  if (ENABLE_CRON) {
-    if (ENABLE_WAGERS_CRON) {
+  if (ENABLE_CRON === "1") {
+    if (ENABLE_WAGERS_CRON === "1") {
       startWagersCron();
     }
   }
