@@ -1,6 +1,6 @@
 # StarRocks + Kafka + Node.js Deployment Guide
 
-This guide sets up and deploys the full pipeline connecting Node.js, Kafka, and StarRocks using Docker Compose.  
+This guide sets up and deploys the full pipeline connecting Node.js, Kafka, and StarRocks using Docker Compose.
 After setup, run `npm run deploy` to rebuild and restart automatically.
 
 ---
@@ -22,12 +22,14 @@ KAFKA_WAGERS_TOPIC=get-wagers-topic
 # StarRocks
 STARROCKS_HOST=starrocks
 STARROCKS_PORT=9030
+STARROCKS_USER=root
+STARROCKS_PASSWORD=
+STARROCKS_DB=starrocks
 
 # Cron
 ENABLE_CRON=1
 ENABLE_WAGERS_CRON=1
 WAGERS_CRON=* * * * *
-
 
 ```
 ---
@@ -156,3 +158,10 @@ curl --location 'http://localhost:8089/api/wagers/2-query?user_id=564&group_by=d
 # Example 4: Yearly grouping
 curl --location 'http://localhost:8089/api/wagers/1-query?user_id=564&group_by=year&from=2020-01-01&to=2025-10-29'
 ```
+
+## Connecting via MySQL Workbench
+
+- **Hostname:** 127.0.0.1
+- **Port:** 9030
+- **Username:** root
+- **Password:** (leave empty if not set)
