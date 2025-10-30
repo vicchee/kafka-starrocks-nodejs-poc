@@ -2,9 +2,10 @@ const { queryWagers, queryWagersCombined } = require("./services");
 
 async function getWagers(req, res) {
   try {
-    const caseType = req.params.mode;
+    const mode = req.params.mode;
     let result;
-    switch (caseType) {
+
+    switch (mode) {
       case "2-query": {
         result = await queryWagers(req.query);
         break;

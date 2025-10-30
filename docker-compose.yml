@@ -1,6 +1,6 @@
 networks:
   kafka-starrocks-net:
-    external: true
+    driver: bridge
 
 services:
   kafka:

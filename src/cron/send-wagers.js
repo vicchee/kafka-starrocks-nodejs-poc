@@ -3,32 +3,37 @@ const {
   generateFixedWager,
   generateNewWager,
 } = require("../utils/fake-data-generator");
-const { sendToKafka, initKafkaProducer } = require("../common/kafka/producer");
+const { producer } = require("../common/kafka");
+const { logger } = require("../common/logger");
 
 const TOPIC = process.env.KAFKA_WAGERS_TOPIC || "get-wagers-topic";
 const CRON_SCHEDULE = process.env.WAGERS_CRON || "* * * * *";
 
 async function startWagersCron() {
   try {
-    await initKafkaProducer();
-    console.log("Starting wagers cron job...");
+    await producer.init();
+    logger.info("Starting wagers cron...");
+
+    const shutdown = async () => {
+      logger.info("Shutting down wagers cron...");
+      await producer.close();
+      process.exit(0);
+    };
+    process.on("SIGINT", shutdown);
+    process.on("SIGTERM", shutdown);
 
     cron.schedule(CRON_SCHEDULE, async () => {
       try {
-        const oldWagerWithNewUpdatedAt = generateFixedWager();
+        const oldWager = generateFixedWager();
         const newWager = generateNewWager();
-        await sendToKafka(TOPIC, [oldWagerWithNewUpdatedAt, newWager]);
-        // console.log(
-        //   "Producing wager to Kafka...",
-        //   oldWagerWithNewUpdatedAt,
-        //   newWager
-        // );
+        await producer.send(TOPIC, [oldWager, newWager]);
+        logger.debug({ oldWager, newWager }, "Produced wagers to Kafka");
       } catch (err) {
-        console.error("Kafka producer error:", err);
+        logger.error(err, "Kafka producer error during cron execution");
       }
     });
   } catch (err) {
-    console.error("Failed to initialize Kafka producer:", err);
+    logger.error(err, "Failed to initialize Kafka producer");
     process.exit(1);
   }
 }

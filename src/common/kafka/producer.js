@@ -1,10 +1,14 @@
 const kafka = require("./client");
-const producer = kafka.producer();
-
+const producerClient = kafka.producer();
 const net = require("net");
+const { logger } = require("../logger");
+
 const BROKERS = (process.env.KAFKA_BROKERS || "kafka:9092").split(",");
 
-async function waitForKafka(host, port, delay = 5000) {
+/**
+ * Wait until a host:port is reachable
+ */
+async function waitForBroker(host, port, delay = 5000) {
   while (true) {
     try {
       await new Promise((resolve, reject) => {
@@ -12,40 +16,62 @@ async function waitForKafka(host, port, delay = 5000) {
           socket.end();
           resolve();
         });
-        socket.on("error", () => reject());
+        socket.on("error", reject);
       });
-      console.log(`Kafka is up at ${host}:${port}`);
+      logger.info({ host, port }, "Broker reachable");
       return;
-    } catch (_) {
-      console.log(`Waiting for Kafka at ${host}:${port}...`);
+    } catch {
+      logger.warn({ host, port }, `Waiting for broker... retry in ${delay}ms`);
       await new Promise((r) => setTimeout(r, delay));
     }
   }
 }
 
-/**
- * Initialize Kafka producer: wait for broker, then ready to send
- */
-async function initKafkaProducer() {
+async function waitForBrokers() {
   for (const broker of BROKERS) {
     const [host, port] = broker.split(":");
-    await waitForKafka(host, parseInt(port, 10));
+    await waitForBroker(host, parseInt(port, 10));
   }
-  console.log("Kafka producer ready.");
 }
 
-async function sendToKafka(topic, messages = []) {
-  await producer.connect();
-  try {
-    for (const msg of messages) {
-      await producer.send({
-        topic,
-        messages: [{ value: JSON.stringify(msg) }],
-      });
+const producer = {
+  /**
+   * Connect the producer after waiting for brokers
+   */
+  init: async () => {
+    await waitForBrokers();
+    await producerClient.connect();
+    logger.info("Kafka producer connected");
+  },
+
+  /**
+   * Send messages to a topic
+   * @param {string} topic
+   * @param {Array<any>} messages
+   */
+  send: async (topic, messages = []) => {
+    if (!messages.length) {
+      return;
     }
-  } finally {
-    await producer.disconnect();
-  }
-}
+    try {
+      const kafkaMessages = messages.map((msg) => ({
+        value: JSON.stringify(msg),
+      }));
+      await producerClient.send({ topic, messages: kafkaMessages });
+      logger.info({ topic, count: messages.length }, "Messages sent to Kafka");
+    } catch (err) {
+      logger.error(err, "Failed to send messages to Kafka");
+      throw err;
+    }
+  },
 
-module.exports = { initKafkaProducer, sendToKafka };
+  /**
+   * Disconnect the producer
+   */
+  close: async () => {
+    await producerClient.disconnect();
+    logger.info("Kafka producer disconnected");
+  },
+};
+
+module.exports = { producer };

@@ -10,11 +10,4 @@ const pool = mysql.createPool({
   connectionLimit: 10,
 });
 
-const query = async (sql, params) => {
-  console.log("[SQL]", sql);
-  console.log("[PARAMS]", params);
-  const [rows] = await pool.query(sql, params);
-  return rows;
-};
-
-module.exports = { pool, query };
+module.exports = pool;
