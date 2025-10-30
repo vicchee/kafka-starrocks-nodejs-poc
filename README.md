@@ -19,6 +19,7 @@ Create a `.env` file in your project root:
 # Node.js
 NODE_ENV=development
 PORT=8089
+LOG_LEVEL=debug   # 'info' | 'warn'
 
 # Kafka
 KAFKA_BROKERS=kafka:9092
