@@ -1,4 +1,4 @@
-const { query } = require("../../common/db/pool");
+const { query } = require("../../common/db");
 
 async function queryWagers({
   merchant_id,

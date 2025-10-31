@@ -2,7 +2,7 @@ const pool = require("./pool");
 const { logger } = require("../logger");
 
 const query = async (sql, params = []) => {
-  logger.debug({ sql, params }, "Executing SQL query");
+  logger.debug("Executing SQL query:\n%s\nParams: %o", sql, params);
   const start = Date.now();
   try {
     const [rows] = await pool.query(sql, params);
